@@ -26,10 +26,9 @@ def processar_estabelecimentos(caminho, mapa_sit_cad, df_motivo_situacao, df_cna
     df_motivo_situ = df_motivo_situacao.rename(columns={'CD': 'MOT_SIT_CAD', 'Motivo_Situação': 'MOTIVO_SITUACAO'})
     df_cnae = df_cnae.rename(columns={'CNAE': 'CNAE_PRINC', 'Atividade': 'ATIVIDADE_PRINCIPAL'})
 
-
     tmp_extract_dir = tempfile.mkdtemp(prefix="rfb_unzipped_")
     conn = None
-
+    
     print(f"📦 Descompactando arquivos .zip para o diretório temporário: {tmp_extract_dir}")
     for zip_path in paths_estab:
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
@@ -46,32 +45,41 @@ def processar_estabelecimentos(caminho, mapa_sit_cad, df_motivo_situacao, df_cna
             arquivo.rename(novo_nome)
             print(f"Renomeado: {arquivo.name} -> {novo_nome.name}")
 
-    # DuckDB pode ler múltiplos arquivos de uma vez usando um glob pattern
-    csv_glob_path = os.path.join(tmp_extract_dir, "*.csv")
-    print(f"👍 Arquivos descompactados. DuckDB irá ler de: '{csv_glob_path}'")
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Unificamos os loops de detecção e conversão
 
-    src_dir = Path(tmp_extract_dir)   # ajuste
-    dst_dir = Path(rf"{tmp_extract_dir}\csvs_utf8")            # ajuste
+    src_dir = Path(tmp_extract_dir)
+    dst_dir = Path(rf"{str(tmp_extract_dir)}/csvs_utf8")
     dst_dir.mkdir(parents=True, exist_ok=True)
     
-    for src in src_dir.glob("*.csv"):
-        with open(src, 'rb') as f:
-                    encoding_csv = chardet.detect(f.read(1000000)).get('encoding', 'utf-8')
-                    print(encoding_csv)
+    print("\n🔄 Convertendo arquivos para UTF-8...")
+    for src_file in src_dir.glob("*.csv"):
+        try:
+            # 1. Detecta o encoding do arquivo atual
+            with open(src_file, 'rb') as f:
+                # Usamos uma amostra maior para mais precisão
+                raw_data = f.read(2000000) 
+                result = chardet.detect(raw_data)
+                # Fallback para ISO-8859-1 se a confiança for baixa ou a detecção falhar
+                encoding_csv = result.get('encoding', 'ISO-8859-1') if result['confidence'] > 0.7 else 'ISO-8859-1'
+            
+            print(f"  - Arquivo: {src_file.name}, Encoding detectado: {encoding_csv}")
 
-    from pathlib import Path
+            # 2. Converte o arquivo usando o encoding detectado
+            dst_file = dst_dir / src_file.name
+            with open(src_file, "r", encoding=encoding_csv, errors="replace") as fin, \
+                 open(dst_file, "w", encoding="utf-8", newline="") as fout:
+                for line in fin:
+                    fout.write(line)
+            
+            # 3. Apaga o arquivo original após a conversão bem-sucedida
+            src_file.unlink()
 
-    for src in src_dir.glob("*.csv"):
-        dst = dst_dir / src.name
-        with open(src, "r", encoding=encoding_csv, errors="strict", newline="") as fin, \
-            open(dst, "w", encoding="utf-8", newline="") as fout:
-            for line in fin:
-                fout.write(line)
-        
-        # Apaga o arquivo original após a conversão
-        src.unlink()
+        except Exception as e:
+            print(f"  ❌ Erro ao processar o arquivo {src_file.name}: {e}")
+            continue # Pula para o próximo arquivo em caso de erro
 
-    print("✓ Transcodificação concluída e arquivos originais removidos:", dst_dir)
+    print("✅ Transcodificação concluída.")
 
     tmp_extract_dir = Path(dst_dir)
     

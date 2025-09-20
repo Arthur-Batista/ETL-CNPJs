@@ -64,7 +64,7 @@ seu-projeto/
 │   ├── Estabelecimentos1.zip
 │   └── ...
 │
-├── extrator_cnpj.py             <-- SCRIPT PRINCIPAL
+├── main.py             <-- SCRIPT PRINCIPAL
 ├── arquivos_auxiliares.py
 ├── processamento_empresa.py
 ├── processamento_estabelecimentos.py

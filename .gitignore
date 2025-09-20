@@ -1,2 +1,4 @@
-/tests
-/venv
+# Ignorar pastas de testes, venv e cache do Python
+/tests/
+/venv/
+/__pycache__/
